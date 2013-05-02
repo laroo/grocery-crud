@@ -50,7 +50,7 @@ class grocery_CRUD_Model  extends CI_Model  {
     	if($this->table_name === null)
     		return false;
     	
-    	$select = "`{$this->table_name}`.*";
+    	$select = $this->get_escaped_tablename($this->table_name).".*";
     	
     	//set_relation special queries 
     	if(!empty($this->relation))
@@ -72,7 +72,7 @@ class grocery_CRUD_Model  extends CI_Model  {
     			}
     			
     			if($this->field_exists($related_field_title))
-    				$select .= ", `{$this->table_name}`.$related_field_title AS '{$this->table_name}.$related_field_title'";
+    				$select .= ", ".$this->get_escaped_tablename($this->table_name).".$related_field_title AS '{$this->table_name}.$related_field_title'";
     		}
     	}
     	
@@ -86,7 +86,7 @@ class grocery_CRUD_Model  extends CI_Model  {
     	
     	$results = $this->db->get($this->table_name)->result();
     	
-    	return $results;
+     	return $results;
     }
     
     public function get_row($table_name = null)
@@ -429,7 +429,9 @@ class grocery_CRUD_Model  extends CI_Model  {
     function get_field_types_basic_table()
     {
     	$db_field_types = array();
-    	foreach($this->db->query("SHOW COLUMNS FROM `{$this->table_name}`")->result() as $db_field_type)
+    	
+    	//foreach($this->db->query("SHOW COLUMNS FROM `{$this->table_name}`")->result() as $db_field_type)
+    	foreach($this->m3pg_getTableColumns( $this->table_name ) as $db_field_type)
     	{
     		$type = explode("(",$db_field_type->Type);
     		$db_type = $type[0];
@@ -579,5 +581,102 @@ class grocery_CRUD_Model  extends CI_Model  {
     {
     	return $this->db->escape_str($value);
     }
+
+    
+	function m3pg_parseTablename( $psTable ) {
+	
+		$iSchemaPos = strpos($psTable,'.');
+		if ($iSchemaPos !== false) {
+				// Schema found!
+				$sSchema = substr($psTable, 0, strpos($psTable,'.') );
+				$sTable = substr($psTable, strpos($psTable,'.')+1 );
+		} else {
+				$sSchema = 'public';
+				$sTable = $psTable;
+		}
 		
+		$o = new StdClass;
+		$o->schema = $sSchema;
+		$o->table = $sTable;
+		$o->schematable = $sSchema.'.'.$sTable;
+	
+		return $o;
+	}
+
+	function m3pg_getTableColumns( $psTable ) {
+		
+		switch ($this->db->dbdriver) {
+			case 'mysql':
+			case 'mysqli':
+				return $this->db->query("SHOW COLUMNS FROM `{$this->table_name}`")->result();
+			break;
+			case 'postgre':
+				$oTable = $this->m3pg_parseTablename( $psTable );
+				
+				// FIXME Extra-column says autoincrement in MySQL
+				$sQuery = "SELECT
+						column_name as \"Field\",
+						data_type as \"Type\",
+						character_maximum_length,
+						is_nullable as \"Null\",
+						column_default as \"Default\",
+						null as \"Extra\"
+				FROM
+						information_schema.COLUMNS
+				WHERE
+						table_schema = '{$oTable->schema}'
+				AND
+						table_name = '{$oTable->table}'
+				order by
+						dtd_identifier";
+				
+				return $this->db->query($sQuery)->result();
+			break;
+			default:
+				die("Unsupported dbdriver '{$this->db->dbdriver}'");
+			break;
+		}
+			
+	}
+	
+	function get_escaped_tablename( $psTable ) {
+		
+		switch ($this->db->dbdriver) {
+			case 'mysql':
+			case 'mysqli':
+				return "`{$this->table_name}`";
+			break;
+			case 'postgre':
+				return "\"{$this->table_name}\"";
+			break;
+			default:
+				die("Unsupported dbdriver '{$this->db->dbdriver}'");
+			break;
+		}
+			
+	}
+	
+	function m3pg_getTablePrimaryKeys( $psTable ) {
+	
+		$oTable = $this->m3pg_parseTablename( $psTable );
+	
+		$sql2 = "SELECT
+				pg_attribute.attname as pk
+		FROM
+				pg_index,
+				pg_class,
+				pg_attribute
+		WHERE
+				pg_class.oid = '{$oTable->schematable}'::regclass
+		AND
+				indrelid = pg_class.oid
+		AND
+				pg_attribute.attrelid = pg_class.oid
+		AND
+				pg_attribute.attnum = any(pg_index.indkey)";
+			
+		return $this->db->query($sql2)->result_array();
+			
+	}
+    
 }
