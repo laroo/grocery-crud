@@ -1509,6 +1509,7 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		$data->add_url				= $this->getAddUrl();
 		$data->edit_url				= $this->getEditUrl();
 		$data->delete_url			= $this->getDeleteUrl();
+		$data->read_url				= $this->getReadUrl();
 		$data->ajax_list_url		= $this->getAjaxListUrl();
 		$data->ajax_list_info_url	= $this->getAjaxListInfoUrl();
 		$data->export_url			= $this->getExportToExcelUrl();
@@ -1519,12 +1520,13 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 
 		$data->unset_add			= $this->unset_add;
 		$data->unset_edit			= $this->unset_edit;
+		$data->unset_read			= $this->unset_read;
 		$data->unset_delete			= $this->unset_delete;
 		$data->unset_export			= $this->unset_export;
 		$data->unset_print			= $this->unset_print;
 
 		$default_per_page = $this->config->default_per_page;
-		$data->paging_options = array('10','25','50','100');
+		$data->paging_options = $this->config->paging_options;
 		$data->default_per_page		= is_numeric($default_per_page) && $default_per_page >1 && in_array($default_per_page,$data->paging_options)? $default_per_page : 25;
 
 		if($data->list === false)
@@ -1537,6 +1539,7 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		{
 			$data->list[$num_row]->edit_url = $data->edit_url.'/'.$row->{$data->primary_key};
 			$data->list[$num_row]->delete_url = $data->delete_url.'/'.$row->{$data->primary_key};
+			$data->list[$num_row]->read_url = $data->read_url.'/'.$row->{$data->primary_key};
 		}
 
 		if(!$ajax)
@@ -1784,6 +1787,7 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		$data->list_url 	= $this->getListUrl();
 		$data->update_url	= $this->getUpdateUrl($state_info);
 		$data->delete_url	= $this->getDeleteUrl($state_info);
+		$data->read_url		= $this->getReadUrl($state_info->primary_key);
 		$data->input_fields = $this->get_edit_input_fields($data->field_values);
 		$data->unique_hash			= $this->get_method_hash();
 
@@ -1795,6 +1799,37 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		$data->is_ajax 			= $this->_is_ajax();
 
 		$this->_theme_view('edit.php',$data);
+		$this->_inline_js("var js_date_format = '".$this->js_date_format."';");
+
+		$this->_get_ajax_results();
+	}
+
+	protected function showReadForm($state_info)
+	{
+		$this->set_js_lib($this->default_javascript_path.'/'.grocery_CRUD::JQUERY);
+
+		$data 				= $this->get_common_data();
+		$data->types 		= $this->get_field_types();
+
+		$data->field_values = $this->get_edit_values($state_info->primary_key);
+
+		$data->add_url		= $this->getAddUrl();
+
+		$data->list_url 	= $this->getListUrl();
+		$data->update_url	= $this->getUpdateUrl($state_info);
+		$data->delete_url	= $this->getDeleteUrl($state_info);
+		$data->read_url		= $this->getReadUrl($state_info->primary_key);
+		$data->input_fields = $this->get_read_input_fields($data->field_values);
+		$data->unique_hash			= $this->get_method_hash();
+
+		$data->fields 		= $this->get_edit_fields();
+		$data->hidden_fields	= $this->get_edit_hidden_fields();
+		$data->unset_back_to_list	= $this->unset_back_to_list;
+
+		$data->validation_url	= $this->getValidationUpdateUrl($state_info->primary_key);
+		$data->is_ajax 			= $this->_is_ajax();
+
+		$this->_theme_view('read.php',$data);
 		$this->_inline_js("var js_date_format = '".$this->js_date_format."';");
 
 		$this->_get_ajax_results();
@@ -1824,7 +1859,7 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		{
 			if(!empty($field_info->primary_key) && !$this->unset_edit)
 			{
-				return $this->l('insert_success_message')." <a href='".$this->getEditUrl($field_info->primary_key)."'>".$this->l('form_edit')." {$this->subject}</a> ";
+				return $this->l('insert_success_message')." <a class='go-to-edit-form' href='".$this->getEditUrl($field_info->primary_key)."'>".$this->l('form_edit')." {$this->subject}</a> ";
 			}
 			else
 			{
@@ -1850,7 +1885,7 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 
 			if(!$this->unset_back_to_list && !empty($insert_result) && !$this->unset_edit)
 			{
-				$success_message .= " <a href='".$this->getEditUrl($insert_result)."'>".$this->l('form_edit')." {$this->subject}</a> ";
+				$success_message .= " <a class='go-to-edit-form' href='".$this->getEditUrl($insert_result)."'>".$this->l('form_edit')." {$this->subject}</a> ";
 
 				if (!$this->_is_ajax()) {
 					$success_message .= $this->l('form_or');
@@ -2013,13 +2048,23 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		$js_files = $this->get_js_files();
 		$css_files =  $this->get_css_files();
 
-		if($this->unset_jquery)
-			unset($js_files[sha1($this->default_javascript_path.'/'.grocery_CRUD::JQUERY)]);
+		$js_lib_files = $this->get_js_lib_files();
+		$js_config_files = $this->get_js_config_files();
 
-		if($this->unset_jquery_ui)
-		{
+		if ($this->unset_jquery) {
+			unset($js_files[sha1($this->default_javascript_path.'/'.grocery_CRUD::JQUERY)]);
+		}
+
+		if ($this->unset_jquery_ui) {
 			unset($css_files[sha1($this->default_css_path.'/ui/simple/'.grocery_CRUD::JQUERY_UI_CSS)]);
 			unset($js_files[sha1($this->default_javascript_path.'/jquery_plugins/ui/'.grocery_CRUD::JQUERY_UI_JS)]);
+		}
+
+		if ($this->unset_bootstrap) {
+			unset($js_files[sha1($this->default_theme_path.'/twitter-bootstrap/js/libs/bootstrap/bootstrap.min.js')]);
+			unset($js_files[sha1($this->default_theme_path.'/twitter-bootstrap/js/libs/bootstrap/application.js')]);
+			unset($css_files[sha1($this->default_theme_path.'/twitter-bootstrap/css/bootstrap-responsive.min.css')]);
+			unset($css_files[sha1($this->default_theme_path.'/twitter-bootstrap/css/bootstrap.min.css')]);
 		}
 
 		if($this->echo_and_die === false)
@@ -2034,7 +2079,13 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 			);
 			$this->_add_js_vars($js_vars);
 
-			return (object)array('output' => $this->views_as_string, 'js_files' => $js_files, 'css_files' => $css_files);
+			return (object)array(
+					'js_files' => $js_files,
+					'js_lib_files' => $js_lib_files,
+					'js_config_files' => $js_config_files,
+					'css_files' => $css_files,
+					'output' => $this->views_as_string,
+			);
 		}
 		elseif($this->echo_and_die === true)
 		{
@@ -2158,7 +2209,7 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		$this->set_css($this->default_css_path.'/jquery_plugins/jquery.ui.datetime.css');
 		$this->set_css($this->default_css_path.'/jquery_plugins/jquery-ui-timepicker-addon.css');
 		$this->set_js_lib($this->default_javascript_path.'/jquery_plugins/ui/'.grocery_CRUD::JQUERY_UI_JS);
-		$this->set_js_lib($this->default_javascript_path.'/jquery_plugins/jquery-ui-timepicker-addon.min.js');
+		$this->set_js_lib($this->default_javascript_path.'/jquery_plugins/jquery-ui-timepicker-addon.js');
 
 		if($this->language !== 'english')
 		{
@@ -2292,7 +2343,17 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 
 	protected function get_readonly_input($field_info,$value)
 	{
-		return '<div id="field-'.$field_info->name.'" class="readonly_label">'.$value.'</div>';
+	    if (isset($value) && !is_array($value))
+	    {
+	    	return '<div id="field-'.$field_info->name.'" class="readonly_label">'.$value.'</div>';
+    	}
+        reset($value);
+        $key = key($value);
+        if (isset($value[$key]))
+        {
+        	return '<div id="field-'.$field_info->name.'" class="readonly_label">'.$value[$key].'</div>';
+        }
+        return;
 	}
 
 	protected function get_set_input($field_info,$value)
@@ -2640,6 +2701,50 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 		return $input_fields;
 	}
 
+	protected function get_read_input_fields($field_values = null)
+	{
+		$fields = $this->get_edit_fields();
+		$types 	= $this->get_field_types();
+
+		$input_fields = array();
+
+		foreach($fields as $field_num => $field)
+		{
+			$field_info = $types[$field->field_name];
+			$field_info->crud_type = 'readonly'; #force readonly
+
+			$field_value = !empty($field_values) && isset($field_values->{$field->field_name}) ? $field_values->{$field->field_name} : null;
+			if(!isset($this->callback_edit_field[$field->field_name]))
+			{
+				$field_input = $this->get_field_input($field_info, $field_value);
+			}
+			else
+			{
+				$primary_key = $this->getStateInfo()->primary_key;
+				$field_input = $field_info;
+				$field_input->input = call_user_func($this->callback_edit_field[$field->field_name], $field_value, $primary_key, $field_info, $field_values);
+			}
+
+			switch ($field_info->crud_type) {
+				case 'invisible':
+					unset($this->edit_fields[$field_num]);
+					unset($fields[$field_num]);
+					continue;
+				break;
+				case 'hidden':
+					$this->edit_hidden_fields[] = $field_input;
+					unset($this->edit_fields[$field_num]);
+					unset($fields[$field_num]);
+					continue;
+				break;
+			}
+
+			$input_fields[$field->field_name] = $field_input;
+		}
+
+		return $input_fields;
+	}
+
 	protected function setThemeBasics()
 	{
 		$this->theme_path = $this->default_theme_path;
@@ -2654,6 +2759,8 @@ class grocery_CRUD_Layout extends grocery_CRUD_Model_Driver
 	public function set_theme($theme = null)
 	{
 		$this->theme = $theme;
+
+		return $this;
 	}
 
 	protected function _get_ajax_results()
@@ -2794,7 +2901,8 @@ class grocery_CRUD_States extends grocery_CRUD_Layout
 		14	=> 'ajax_relation_n_n',
 		15	=> 'success',
 		16  => 'export',
-		17  => 'print'
+		17  => 'print',
+		18  => 'read'
 	);
 
 	protected function getStateCode()
@@ -2958,6 +3066,14 @@ class grocery_CRUD_States extends grocery_CRUD_Layout
 			return $this->state_url('edit/'.$primary_key);
 	}
 
+	protected function getReadUrl($primary_key = null)
+	{
+		if($primary_key === null)
+			return $this->state_url('read');
+		else
+			return $this->state_url('read/'.$primary_key);
+	}
+
 	protected function getUpdateUrl($state_info)
 	{
 		return $this->state_url('update/'.$state_info->primary_key);
@@ -3016,6 +3132,7 @@ class grocery_CRUD_States extends grocery_CRUD_Layout
 			break;
 
 			case 3:
+			case 18: // read
 				if($first_parameter !== null)
 				{
 					$state_info = (object)array('primary_key' => $first_parameter);
@@ -3180,7 +3297,7 @@ class grocery_CRUD_States extends grocery_CRUD_Layout
  * @license     https://github.com/scoumbourdis/grocery-crud/blob/master/license-grocery-crud.txt
  * @link		http://www.grocerycrud.com/documentation
  */
-class grocery_CRUD extends grocery_CRUD_States
+class Grocery_CRUD extends grocery_CRUD_States
 {
 	/**
 	 * Grocery CRUD version
@@ -3189,14 +3306,15 @@ class grocery_CRUD extends grocery_CRUD_States
 	 */
 	const	VERSION = "1.3.3";
 
-	const	JQUERY 			= "jquery-1.9.1.min.js";
-	const	JQUERY_UI_JS 	= "jquery-ui-1.10.1.custom.min.js";
+	const	JQUERY 			= "jquery-1.10.2.min.js";
+	const	JQUERY_UI_JS 	= "jquery-ui-1.10.3.custom.min.js";
 	const	JQUERY_UI_CSS 	= "jquery-ui-1.10.1.custom.min.css";
 
-	private $state_code 			= null;
-	private $state_info 			= null;
+	protected $state_code 			= null;
+	protected $state_info 			= null;
+	protected $columns				= null;
+
 	private $basic_db_table_checked = false;
-	private $columns				= null;
 	private $columns_checked		= false;
 	private $add_fields_checked		= false;
 	private $edit_fields_checked	= false;
@@ -3245,8 +3363,10 @@ class grocery_CRUD extends grocery_CRUD_States
 	protected $unset_add			= false;
 	protected $unset_edit			= false;
 	protected $unset_delete			= false;
+	protected $unset_read			= false;
 	protected $unset_jquery			= false;
 	protected $unset_jquery_ui		= false;
+	protected $unset_bootstrap 		= false;
 	protected $unset_list			= false;
 	protected $unset_export			= false;
 	protected $unset_print			= false;
@@ -3420,7 +3540,6 @@ class grocery_CRUD extends grocery_CRUD_States
 		return $this;
 	}
 
-
 	/**
 	 * Unsets the jquery UI Javascript and CSS. This function is really useful
 	 * when the jquery UI JavaScript and CSS are already included in the main template.
@@ -3431,6 +3550,19 @@ class grocery_CRUD extends grocery_CRUD_States
 	public function unset_jquery_ui()
 	{
 		$this->unset_jquery_ui = true;
+
+		return $this;
+	}
+
+	/**
+	 * Unsets just the twitter bootstrap libraries from the js and css. This function can be used if there is already twitter bootstrap files included
+	 * in the main template. If you are already using a bootstrap template then it's not necessary to load the files again.
+	 *
+	 * @return	void
+	 */
+	public function unset_bootstrap()
+	{
+		$this->unset_bootstrap = true;
 
 		return $this;
 	}
@@ -3472,6 +3604,18 @@ class grocery_CRUD extends grocery_CRUD_States
 	}
 
 	/**
+	 * Unsets the read operation from the list
+	 *
+	 * @return	void
+	 */
+	public function unset_read()
+	{
+		$this->unset_read = true;
+
+		return $this;
+	}
+
+	/**
 	 * Unsets the export button and functionality from the list
 	 *
 	 * @return	void
@@ -3506,6 +3650,7 @@ class grocery_CRUD extends grocery_CRUD_States
 		$this->unset_add 	= true;
 		$this->unset_edit 	= true;
 		$this->unset_delete = true;
+		$this->unset_read	= true;
 		$this->unset_export = true;
 		$this->unset_print  = true;
 
@@ -4034,6 +4179,7 @@ class grocery_CRUD extends grocery_CRUD_States
 		$this->config->text_editor_type		= $ci->config->item('grocery_crud_text_editor_type');
 		$this->config->character_limiter	= $ci->config->item('grocery_crud_character_limiter');
 		$this->config->dialog_forms			= $ci->config->item('grocery_crud_dialog_forms');
+		$this->config->paging_options		= $ci->config->item('grocery_crud_paging_options');
 
 		/** Initialize default paths */
 		$this->default_javascript_path				= $this->default_assets_path.'/js';
@@ -4323,6 +4469,24 @@ class grocery_CRUD extends grocery_CRUD_States
 				$state_info = $this->getStateInfo();
 				$this->set_ajax_list_queries($state_info);
 				$this->print_webpage($state_info);
+				break;
+
+			case 18: //read
+				if($this->unset_read)
+				{
+					throw new Exception('You don\'t have permissions for this operation', 14);
+					die();
+				}
+
+				if($this->theme === null)
+					$this->set_theme($this->default_theme);
+				$this->setThemeBasics();
+
+				$this->set_basic_Layout();
+
+				$state_info = $this->getStateInfo();
+
+				$this->showReadForm($state_info);
 			break;
 
 		}
@@ -4756,11 +4920,23 @@ class grocery_CRUD extends grocery_CRUD_States
 	 * @param string $field_name
 	 * @param string $upload_path
 	 */
-	public function set_field_upload($field_name, $upload_dir = null)
+	public function set_field_upload($field_name, $upload_dir = '')
 	{
-		$upload_dir = substr($upload_dir,-1,1) == '/' ? substr($upload_dir,0,-1) : $upload_dir;
-		$this->upload_fields[$field_name] = (object)array( 'field_name' => $field_name , 'upload_path' => $upload_dir, 'encrypted_field_name' =>  $this->_unique_field_name($field_name));
+		$upload_dir = !empty($upload_dir) && substr($upload_dir,-1,1) == '/'
+						? substr($upload_dir,0,-1)
+						: $upload_dir;
+		$upload_dir = !empty($upload_dir) ? $upload_dir : 'assets/uploads/files';
 
+		/** Check if the upload Url folder exists. If not then throw an exception **/
+		if (!is_dir(FCPATH.$upload_dir)) {
+			throw new Exception("It seems that the folder \"".FCPATH.$upload_dir."\" for the field name
+					\"".$field_name."\" doesn't exists. Please create the folder and try again.");
+		}
+
+		$this->upload_fields[$field_name] = (object) array(
+				'field_name' => $field_name,
+				'upload_path' => $upload_dir,
+				'encrypted_field_name' => $this->_unique_field_name($field_name));
 		return $this;
 	}
 }
@@ -5088,7 +5264,7 @@ class UploadHandler
                 }
             } else if ($this->options['discard_aborted_uploads']) {
                 unlink($file_path);
-                $file->error = 'abort';
+                $file->error = "It seems that this user doesn't have permissions to upload to this folder";
             }
             $file->size = $file_size;
             $file->delete_url = $this->options['script_url']

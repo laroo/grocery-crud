@@ -37,6 +37,7 @@ $(function(){
 										window.location = data.success_list_url;
 									} else {
 										$(".ui-dialog-content").dialog("close");
+										success_message(data.success_message);
 									}
 
 									return true;
@@ -80,7 +81,7 @@ $(function(){
 	if( $('#cancel-button').closest('.ui-dialog').length === 0 ) {
 
 		$('#cancel-button').click(function(){
-			if( confirm( message_alert_edit_form ) )
+			if( $(this).hasClass('back-to-list') || confirm( message_alert_edit_form ) )
 			{
 				window.location = list_url;
 			}
