@@ -12,7 +12,7 @@ BEGIN;
 
 DROP TABLE IF EXISTS "actor";
 CREATE TABLE "actor" (
-  "actor_id" SERIAL NOT NULL,
+  "actor_id" SERIAL NOT NULL PRIMARY KEY,
   "fullname" varchar(250) NOT NULL,
   "last_update" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -233,7 +233,7 @@ INSERT INTO "actor" ("actor_id", "fullname", "last_update") VALUES
 
 DROP TABLE IF EXISTS "category";
 CREATE TABLE "category" (
-  "category_id" SERIAL NOT NULL,
+  "category_id" SERIAL NOT NULL PRIMARY KEY,
   "name" varchar(25) NOT NULL
 );
 
@@ -267,7 +267,7 @@ INSERT INTO "category" ("category_id", "name") VALUES
 
 DROP TABLE IF EXISTS "customers";
 CREATE TABLE "customers" (
-  "customerNumber" SERIAL NOT NULL,
+  "customerNumber" SERIAL NOT NULL PRIMARY KEY,
   "customerName" varchar(50) NOT NULL,
   "contactLastName" varchar(50) NOT NULL,
   "contactFirstName" varchar(50) NOT NULL,
@@ -418,12 +418,12 @@ INSERT INTO "customers" ("customerNumber", "customerName", "contactLastName", "c
 
 DROP TABLE IF EXISTS "employees";
 CREATE TABLE "employees" (
-  "employeeNumber" SERIAL NOT NULL,
+  "employeeNumber" SERIAL NOT NULL PRIMARY KEY,
   "lastName" varchar(50) NOT NULL,
   "firstName" varchar(50) NOT NULL,
   "extension" varchar(10) NOT NULL,
   "email" varchar(100) NOT NULL,
-  "officeCode" varchar(10) NOT NULL,
+  "officeCode" INTEGER NOT NULL, -- use integer instead of varchar because of 'customer'-table
   "file_url" varchar(250) NOT NULL,
   "jobTitle" varchar(50) NOT NULL
 );
@@ -465,7 +465,7 @@ INSERT INTO "employees" ("employeeNumber", "lastName", "firstName", "extension",
 
 DROP TABLE IF EXISTS "film";
 CREATE TABLE "film" (
-  "film_id" SERIAL NOT NULL,
+  "film_id" SERIAL NOT NULL PRIMARY KEY,
   "title" varchar(255) NOT NULL,
   "description" text,
   "release_year" SMALLINT DEFAULT NULL,
@@ -9014,7 +9014,7 @@ INSERT INTO "film_category" ("film_id", "category_id") VALUES
 
 DROP TABLE IF EXISTS "offices";
 CREATE TABLE "offices" (
-  "officeCode" SERIAL NOT NULL,
+  "officeCode" SERIAL NOT NULL PRIMARY KEY,
   "city" varchar(50) NOT NULL,
   "phone" varchar(50) NOT NULL,
   "addressLine1" varchar(50) NOT NULL,
@@ -12065,15 +12065,14 @@ INSERT INTO "orderdetails" ("orderNumber", "productCode", "quantityOrdered", "pr
 
 DROP TABLE IF EXISTS "orders";
 CREATE TABLE "orders" (
-  "orderNumber" SERIAL NOT NULL,
+  "orderNumber" SERIAL NOT NULL PRIMARY KEY,
   "orderDate" timestamp NOT NULL,
   "requiredDate" timestamp NOT NULL,
   "shippedDate" timestamp DEFAULT NULL,
   "status" varchar(50) NOT NULL,
   /* "status" enum('Cancelled','Disputed','In Process','On Hold','Resolved','Shipped') NOT NULL, */
   "comments" text,
-  "customerNumber" integer NOT NULL,
-  PRIMARY KEY ("orderNumber")
+  "customerNumber" integer NOT NULL
 );
 
 --
@@ -12865,3 +12864,5 @@ INSERT INTO "products" ("productCode", "productName", "productLine", "productSca
 ('S700_4002', 'American Airlines: MD-11S', 'Planes', '1:700', 'Second Gear Diecast', 'Polished finish. Exact replia with official logos and insignias and retractable wheels', 8820, 36.27, 74.03),
 ('S72_1253', 'Boeing X-32A JSF', 'Planes', '1:72', 'Motor City Art Classics', '10" Wingspan with retractable landing gears.Comes with pilot', 4857, 32.77, 49.66),
 ('S72_3212', 'Pont Yacht', 'Ships', '1:72', 'Unimax Art Galleries', 'Measures 38 inches Long x 33 3/4 inches High. Includes a stand.\r\nMany extras including rigging, long boats, pilot house, anchors, etc. Comes with 2 masts, all square-rigged', 414, 33.3, 54.6);
+
+COMMIT;

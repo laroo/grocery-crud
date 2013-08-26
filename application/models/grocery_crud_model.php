@@ -64,15 +64,23 @@ class grocery_CRUD_Model  extends CI_Model  {
 				if(strstr($related_field_title,'{'))
 				{
 					$related_field_title = str_replace(" ","&nbsp;",$related_field_title);
-    				$select .= ", CONCAT('".str_replace(array('{','}'),array("',COALESCE({$unique_join_name}.",", ''),'"),str_replace("'","\\'",$related_field_title))."') as $unique_field_name";
+
+                    if ($this->db->dbdriver == 'postgre') {
+                        $select .= ", CONCAT('".str_replace(array('{','}'),array("',COALESCE({$unique_join_name}.\"","\", ''),'"),str_replace("'","\\'",$related_field_title))."') as $unique_field_name";
+                    } else {
+                        $select .= ", CONCAT('".str_replace(array('{','}'),array("',COALESCE({$unique_join_name}.",", ''),'"),str_replace("'","\\'",$related_field_title))."') as $unique_field_name";
+                    }
+
 				}
     			else
     			{
-    				$select .= ", $unique_join_name.$related_field_title AS $unique_field_name";
+                    $select .= ", $unique_join_name.".$this->get_escaped_columnname($related_field_title)." AS $unique_field_name";
     			}
 
     			if($this->field_exists($related_field_title))
-    				$select .= ", ".$this->get_escaped_tablename($this->table_name).".$related_field_title AS '{$this->table_name}.$related_field_title'";
+                {
+                        $select .= ", ".$this->get_escaped_tablename($this->table_name).".".$this->get_escaped_columnname($related_field_title)." AS '{$this->table_name}.$related_field_title'";
+                }
     		}
     	}
 
@@ -124,13 +132,22 @@ class grocery_CRUD_Model  extends CI_Model  {
 	    	}
 	    	else
 	    	{
-	    		$field .= "$selection_table.$title_field_selection_table";
+	    		$field .= "{$selection_table}.".$this->get_escaped_columnname($title_field_selection_table);
 	    	}
 
-    		//Sorry Codeigniter but you cannot help me with the subquery!
-    		$select .= ", (SELECT GROUP_CONCAT(DISTINCT $field) FROM $selection_table "
-    			."LEFT JOIN $relation_table ON $relation_table.$primary_key_alias_to_selection_table = $selection_table.$primary_key_selection_table "
-    			."WHERE $relation_table.$primary_key_alias_to_this_table = `{$this->table_name}`.$this_table_primary_key GROUP BY $relation_table.$primary_key_alias_to_this_table) AS $field_name";
+            //Sorry Codeigniter but you cannot help me with the subquery!
+            if ($this->db->dbdriver == 'postgre') {
+                // Fix for GROUP_CONCAT (postgresql > 9.0)
+                $select .= ", (SELECT DISTINCT array_to_string(array_agg(DISTINCT $field), ',') FROM $selection_table "
+                    ."LEFT JOIN $relation_table ON $relation_table.\"$primary_key_alias_to_selection_table\" = $selection_table.\"$primary_key_selection_table\" "
+                    ."WHERE $relation_table.$primary_key_alias_to_this_table = \"{$this->table_name}\".\"$this_table_primary_key\" GROUP BY $relation_table.$primary_key_alias_to_this_table) AS $field_name";
+            } else {
+
+                $select .= ", (SELECT GROUP_CONCAT(DISTINCT $field) FROM $selection_table "
+                    ."LEFT JOIN $relation_table ON $relation_table.$primary_key_alias_to_selection_table = $selection_table.$primary_key_selection_table "
+                    ."WHERE $relation_table.$primary_key_alias_to_this_table = `{$this->table_name}`.$this_table_primary_key GROUP BY $relation_table.$primary_key_alias_to_this_table) AS $field_name";
+            }
+
     	}
 
     	return $select;
@@ -250,16 +267,22 @@ class grocery_CRUD_Model  extends CI_Model  {
 
     	$related_primary_key = $this->get_primary_key($related_table);
 
-    	$select = "$related_table.$related_primary_key, ";
+    	$select = "$related_table.".$this->get_escaped_columnname($related_primary_key).", ";
 
     	if(strstr($related_field_title,'{'))
     	{
     		$related_field_title = str_replace(" ", "&nbsp;", $related_field_title);
-    		$select .= "CONCAT('".str_replace(array('{','}'),array("',COALESCE(",", ''),'"),str_replace("'","\\'",$related_field_title))."') as $field_name_hash";
+
+            if ($this->db->dbdriver == 'postgre') {
+                $select .= "CONCAT('".str_replace(array('{','}'),array("',COALESCE(\"","\", ''),'"),str_replace("'","\\'",$related_field_title))."') as $field_name_hash";
+            } else {
+                $select .= "CONCAT('".str_replace(array('{','}'),array("',COALESCE(",", ''),'"),str_replace("'","\\'",$related_field_title))."') as $field_name_hash";
+            }
+
     	}
     	else
     	{
-	    	$select .= "$related_table.$related_field_title as $field_name_hash";
+	    	$select .= "$related_table.".$this->get_escaped_columnname($related_field_title)." as $field_name_hash";
     	}
 
     	$this->db->select($select,false);
@@ -534,6 +557,10 @@ class grocery_CRUD_Model  extends CI_Model  {
     {
     	if($table_name == null)
     	{
+            if ($this->db->dbdriver == 'postgre') {
+                return $this->m3pg_getTablePrimaryKeys($this->table_name);
+            }
+
     		if(isset($this->primary_keys[$this->table_name]))
     		{
     			return $this->primary_keys[$this->table_name];
@@ -560,6 +587,10 @@ class grocery_CRUD_Model  extends CI_Model  {
     	}
     	else
     	{
+            if ($this->db->dbdriver == 'postgre') {
+                return $this->m3pg_getTablePrimaryKeys($table_name);
+            }
+
     		if(isset($this->primary_keys[$table_name]))
     		{
     			return $this->primary_keys[$table_name];
@@ -586,7 +617,7 @@ class grocery_CRUD_Model  extends CI_Model  {
     }
 
 	function m3pg_parseTablename( $psTable ) {
-	
+
 		$iSchemaPos = strpos($psTable,'.');
 		if ($iSchemaPos !== false) {
 				// Schema found!
@@ -601,12 +632,12 @@ class grocery_CRUD_Model  extends CI_Model  {
 		$o->schema = $sSchema;
 		$o->table = $sTable;
 		$o->schematable = $sSchema.'.'.$sTable;
-	
+
 		return $o;
 	}
 
 	function m3pg_getTableColumns( $psTable ) {
-		
+
 		switch ($this->db->dbdriver) {
 			case 'mysql':
 			case 'mysqli':
@@ -631,7 +662,7 @@ class grocery_CRUD_Model  extends CI_Model  {
 						table_name = '{$oTable->table}'
 				order by
 						dtd_identifier";
-				
+
 				return $this->db->query($sQuery)->result();
 			break;
 			default:
@@ -642,14 +673,18 @@ class grocery_CRUD_Model  extends CI_Model  {
 	}
 	
 	function get_escaped_tablename( $psTable ) {
-		
+
+        if ($psTable == null) {
+            $psTable = $this->table_name;
+        }
+
 		switch ($this->db->dbdriver) {
 			case 'mysql':
 			case 'mysqli':
-				return "`{$this->table_name}`";
+				return "`{$psTable}`";
 			break;
 			case 'postgre':
-				return "\"{$this->table_name}\"";
+				return "\"{$psTable}\"";
 			break;
 			default:
 				die("Unsupported dbdriver '{$this->db->dbdriver}'");
@@ -657,11 +692,28 @@ class grocery_CRUD_Model  extends CI_Model  {
 		}
 			
 	}
+
+    function get_escaped_columnname( $psColumn ) {
+
+        switch ($this->db->dbdriver) {
+            case 'mysql':
+            case 'mysqli':
+                return "`{$psColumn}`";
+                break;
+            case 'postgre':
+                return "\"{$psColumn}\"";
+                break;
+            default:
+                die("Unsupported dbdriver '{$this->db->dbdriver}'");
+                break;
+        }
+
+    }
 	
 	function m3pg_getTablePrimaryKeys( $psTable ) {
-	
+
 		$oTable = $this->m3pg_parseTablename( $psTable );
-	
+
 		$sql2 = "SELECT
 				pg_attribute.attname as pk
 		FROM
@@ -676,8 +728,12 @@ class grocery_CRUD_Model  extends CI_Model  {
 				pg_attribute.attrelid = pg_class.oid
 		AND
 				pg_attribute.attnum = any(pg_index.indkey)";
-			
-		return $this->db->query($sql2)->result_array();
+
+		$aPks = $this->db->query($sql2)->result_array();
+
+        $aFirst = current($aPks);
+        return $aFirst['pk'];
+
 			
 	}
 
